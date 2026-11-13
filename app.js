@@ -14,6 +14,7 @@
   let idx = 0, phase = 0, playing = true, elapsed = 0, lastT = 0;
   let shuffle = true, topic = '', secs = 10, wordSecs = 2;
   let quiz = false, answered = false, quizFor = null, quizOpts = [], wrong = new Set();
+  let sTopic = '';
   const zoom = { s: 1, x: 0, y: 0 };
 
   try {
@@ -29,10 +30,13 @@
 
   /* ======================= ROUTING ======================= */
   function route() {
-    const m = location.hash === '#quan-ly' ? 'manage' : 'play';
+    const h = location.hash;
+    const m = h === '#quan-ly' ? 'manage' : h === '#danh-van' ? 'spell' : 'play';
     $('viewPlay').hidden = m !== 'play';
+    $('viewSpell').hidden = m !== 'spell';
     $('viewManage').hidden = m !== 'manage';
     $('tabPlay').setAttribute('aria-current', m === 'play' ? 'page' : 'false');
+    $('tabSpell').setAttribute('aria-current', m === 'spell' ? 'page' : 'false');
     $('tabManage').setAttribute('aria-current', m === 'manage' ? 'page' : 'false');
     if (m !== 'play') setPlaying(false);
   }
@@ -65,10 +69,11 @@
       }
       if (error) { showEmpty('Không tải được bộ thẻ', error.message); return; }
       const keep = deck[idx];
-      cards = data.map(c => ({ ...c, url: imgUrl(c.image_path) }));
+      cards = data.map(c => ({ ...c, url: c.image_path ? imgUrl(c.image_path) : '' }));
       fillTopics();
       rebuildDeck(keep);
       renderList();
+      spellSync();
     })();
     try { await loading; } finally { loading = null; }
   }
@@ -91,7 +96,7 @@
   function fillTopics() {
     const ts = [...new Set(cards.map(c => (c.topic || '').trim()).filter(Boolean))]
       .sort((a, b) => a.localeCompare(b, 'vi', { numeric: true }));
-    for (const sel of [$('topicSel'), $('manageTopic')]) {
+    for (const sel of [$('topicSel'), $('manageTopic'), $('spellTopic')]) {
       const cur = sel.value;
       sel.length = 1;
       ts.forEach(t => { const o = document.createElement('option'); o.value = t; o.textContent = t; sel.appendChild(o); });
@@ -100,9 +105,10 @@
     $('topicList').innerHTML = '';
     ts.forEach(t => { const o = document.createElement('option'); o.value = t; $('topicList').appendChild(o); });
     topic = $('topicSel').value;
+    sTopic = $('spellTopic').value;
   }
   function rebuildDeck(keepId) {
-    const ids = cards.filter(c => !topic || (c.topic || '').trim() === topic).map(c => c.id);
+    const ids = cards.filter(c => c.image_path && (!topic || (c.topic || '').trim() === topic)).map(c => c.id);   // Học/Chọn đáp án: chỉ thẻ có ảnh
     if (shuffle) {
       // giữ thứ tự trộn cũ, thẻ mới chèn vào cuối
       const old = deck.filter(id => ids.includes(id));
@@ -124,7 +130,7 @@
 
   function renderCard() {
     if (!deck.length) {
-      showEmpty('Chưa có thẻ nào', 'Vào tab “Tạo thẻ” để thêm ảnh và từ mới.');
+      showEmpty('Chưa có thẻ có ảnh', 'Vào tab “Tạo thẻ” để thêm ảnh và từ mới.');
       $('counter').textContent = '0 / 0';
       return;
     }
@@ -428,16 +434,17 @@
   };
 
   function addFiles(list) {
-    for (const f of list) if (f.type.startsWith('image/')) pending.push({ file: f, url: URL.createObjectURL(f), word: wordFromName(f.name) });
+    for (const f of list) if (f.type.startsWith('image/')) pending.push({ file: f, url: URL.createObjectURL(f), word: wordFromName(f.name), meaning: '' });
     renderPending();
   }
   function renderPending() {
     const box = $('pending'); box.innerHTML = '';
     pending.forEach((p, i) => {
       const el = document.createElement('div'); el.className = 'item';
-      el.innerHTML = `<img alt=""><div class="fields"><input class="field" aria-label="Từ mới" placeholder="✏️ Nhập từ mới (vd: gloves)"></div><div class="acts"><button class="ibtn del" aria-label="Bỏ ảnh này">${ICON_DEL}</button></div>`;
+      el.innerHTML = `<img alt=""><div class="fields"><input class="field pw" aria-label="Từ mới" placeholder="✏️ Nhập từ mới (vd: gloves)"><input class="field pm" aria-label="Nghĩa" placeholder="Nghĩa (không bắt buộc)"></div><div class="acts"><button class="ibtn del" aria-label="Bỏ ảnh này">${ICON_DEL}</button></div>`;
       el.querySelector('img').src = p.url;
-      const inp = el.querySelector('input'); inp.value = p.word; inp.oninput = () => (p.word = inp.value);
+      const inp = el.querySelector('.pw'); inp.value = p.word; inp.oninput = () => (p.word = inp.value);
+      const mi = el.querySelector('.pm'); mi.value = p.meaning; mi.oninput = () => (p.meaning = mi.value);
       el.querySelector('button').onclick = () => { URL.revokeObjectURL(p.url); pending.splice(i, 1); renderPending(); };
       box.appendChild(el);
     });
@@ -489,7 +496,7 @@
         const up = await sb.storage.from(BUCKET).upload(path, blob, { contentType: blob.type, cacheControl: '31536000' });
         if (up.error) throw up.error;
         order += 1;
-        const ins = await sb.from('cards').insert({ word: p.word.trim(), topic: t, image_path: path, sort_order: order });
+        const ins = await sb.from('cards').insert({ word: p.word.trim(), meaning: (p.meaning || '').trim(), topic: t, image_path: path, sort_order: order });
         if (ins.error) { await sb.storage.from(BUCKET).remove([path]); throw ins.error; }
         URL.revokeObjectURL(p.url);
         pending.splice(pending.indexOf(p), 1);
@@ -514,16 +521,17 @@
     if (!shown.length) { box.innerHTML = '<p class="status">Chưa có thẻ nào ở đây.</p>'; return; }
     shown.forEach((c, i) => {
       const el = document.createElement('div'); el.className = 'item';
-      el.innerHTML = `<button class="thumb" title="Bấm để đổi ảnh" aria-label="Đổi ảnh"><img alt=""><span>Đổi ảnh</span></button><div class="fields"><input class="field w" aria-label="Từ mới"><input class="field t" list="topicList" aria-label="Chủ đề" placeholder="Chủ đề"></div>
+      el.innerHTML = `<button class="thumb" title="Bấm để đổi ảnh" aria-label="Đổi ảnh"><img alt=""><span>Đổi ảnh</span></button><div class="fields"><input class="field w" aria-label="Từ mới"><input class="field m" aria-label="Nghĩa" placeholder="Nghĩa"><input class="field t" list="topicList" aria-label="Chủ đề" placeholder="Chủ đề"></div>
         <div class="acts"><button class="ibtn up" aria-label="Lên trên">${ICON_UP}</button><button class="ibtn dn" aria-label="Xuống dưới">${ICON_DOWN}</button><button class="ibtn del" aria-label="Xoá thẻ">${ICON_DEL}</button></div>`;
-      el.querySelector('img').src = c.url;
       const th = el.querySelector('.thumb');
+      if (c.url) el.querySelector('img').src = c.url;
+      else { th.classList.add('noimg'); el.querySelector('img').remove(); th.querySelector('span').textContent = '+ Ảnh'; th.title = 'Thêm ảnh'; }
       th.onclick = () => pickImageFor(c);
       th.ondragover = e => { e.preventDefault(); th.classList.add('over'); };
       th.ondragleave = () => th.classList.remove('over');
       th.ondrop = e => { e.preventDefault(); th.classList.remove('over'); const f = e.dataTransfer.files[0]; if (f) replaceImage(c, f); };
-      const w = el.querySelector('.w'), t = el.querySelector('.t');
-      w.value = c.word || ''; t.value = c.topic || '';
+      const w = el.querySelector('.w'), t = el.querySelector('.t'), mm = el.querySelector('.m');
+      w.value = c.word || ''; t.value = c.topic || ''; mm.value = c.meaning || '';
       const save = (inp, key) => async () => {
         const v = inp.value.trim();
         if (v === (c[key] || '')) return;
@@ -532,8 +540,8 @@
         setStatus('listStatus', error ? 'Không lưu được: ' + error.message : 'Đã lưu.', !!error);
         if (!error) loadCards();
       };
-      w.onchange = save(w, 'word'); t.onchange = save(t, 'topic');
-      [w, t].forEach(x => (x.onkeydown = e => { if (e.key === 'Enter') x.blur(); }));
+      w.onchange = save(w, 'word'); t.onchange = save(t, 'topic'); mm.onchange = save(mm, 'meaning');
+      [w, t, mm].forEach(x => (x.onkeydown = e => { if (e.key === 'Enter') x.blur(); }));
       const up = el.querySelector('.up'), dn = el.querySelector('.dn');
       up.disabled = i === 0; dn.disabled = i === shown.length - 1;
       up.onclick = () => swap(c, shown[i - 1]);
@@ -542,7 +550,7 @@
         if (!confirm(`Xoá thẻ “${c.word}”?`)) return;
         const { error } = await sb.from('cards').delete().eq('id', c.id);
         if (error) { setStatus('listStatus', 'Không xoá được: ' + error.message, true); return; }
-        await sb.storage.from(BUCKET).remove([c.image_path]);
+        if (c.image_path) await sb.storage.from(BUCKET).remove([c.image_path]);
         setStatus('listStatus', 'Đã xoá.');
         loadCards();
       };
@@ -583,6 +591,245 @@
     loadCards();
   }
   $('manageTopic').onchange = renderList;
+
+
+  /* ======================= MODULE: THÊM TỪ KHÔNG ẢNH ======================= */
+  $('wordForm').onsubmit = async e => {
+    e.preventDefault();
+    const word = $('wfWord').value.trim();
+    if (!word) return;
+    const order = (cards.length ? Math.max(...cards.map(c => c.sort_order)) : 0) + 1;
+    const { error } = await sb.from('cards').insert({ word, meaning: $('wfMeaning').value.trim(), topic: $('wfTopic').value.trim(), image_path: null, sort_order: order });
+    if (error) { setStatus('wordStatus', 'Không thêm được: ' + error.message, true); return; }
+    setStatus('wordStatus', `Đã thêm “${word}”.`);
+    $('wfWord').value = ''; $('wfMeaning').value = ''; $('wfWord').focus();
+    loadCards();
+  };
+
+  /* ======================= MODULE 3: ĐÁNH VẦN ======================= */
+  let sMode = 'missing', sDeck = [], sIdx = 0, sFor = null, sDone = false, sTimer = null;
+  let sHidden = new Set(), sVals = {};           // điền chữ thiếu
+  let sTiles = [], sAns = {};                    // sắp xếp: tiles [{id,ch,used}], sAns[pos] = tileId
+  try { if (localStorage.getItem('fc-spell-mode') === 'scramble') sMode = 'scramble'; } catch (e) {}
+  $('spellMode').value = sMode;
+  const isLetter = ch => /\p{L}/u.test(ch);
+  const eqCh = (a, b) => (a || '').toLowerCase() === (b || '').toLowerCase();
+  const sCur = () => cards.find(c => c.id === sDeck[sIdx]);
+  const sChars = () => [...(sCur()?.word || '').trim()];
+
+  function spellSync() {
+    const ids = cards.filter(c => (c.word || '').trim() && (!sTopic || (c.topic || '').trim() === sTopic)).map(c => c.id);
+    const keepId = sDeck[sIdx];
+    const old = sDeck.filter(id => ids.includes(id));
+    const fresh = shuffled(ids.filter(id => !old.includes(id)));
+    sDeck = old.concat(fresh);
+    const k = sDeck.indexOf(keepId);
+    sIdx = k >= 0 ? k : Math.min(sIdx, Math.max(0, sDeck.length - 1));
+    if (k < 0) sFor = null;
+    renderSpell();
+  }
+  function spellNew() {
+    const c = sCur(); if (!c) return;
+    sFor = c.id; sDone = false; clearTimeout(sTimer);
+    const chars = sChars();
+    const letters = chars.map((ch, i) => isLetter(ch) ? i : -1).filter(i => i >= 0);
+    if (sMode === 'missing') {
+      const k = letters.length <= 2 ? 1 : Math.max(1, Math.round(letters.length * 0.4));
+      sHidden = new Set(shuffled(letters).slice(0, k)); sVals = {};
+    } else {
+      let order = letters.map((pos, i) => ({ id: 't' + i, ch: chars[pos], used: false }));
+      const orig = order.map(t => t.ch.toLowerCase()).join('');
+      for (let n = 0; n < 10; n++) {             // trộn đến khi khác thứ tự gốc
+        order = shuffled(order);
+        if (order.map(t => t.ch.toLowerCase()).join('') !== orig || new Set(orig).size < 2) break;
+      }
+      sTiles = order; sAns = {};
+    }
+  }
+  function renderSpell() {
+    const has = sDeck.length > 0;
+    $('spellBox').hidden = !has; $('spellEmpty').hidden = has;
+    if (!has) {
+      $('spellEmpty').querySelector('strong').textContent = 'Chưa có từ nào';
+      $('spellEmpty').querySelector('span').textContent = 'Vào tab “Tạo thẻ” để thêm từ.';
+      $('spellCounter').textContent = '0 / 0';
+      return;
+    }
+    const c = sCur();
+    if (sFor !== c.id) spellNew();
+    $('spellCounter').textContent = (sIdx + 1) + ' / ' + sDeck.length;
+    const img = $('spellImg');
+    img.hidden = !c.url; if (c.url && img.getAttribute('src') !== c.url) img.setAttribute('src', c.url);
+    $('spellMeaning').textContent = c.meaning || (c.url ? '' : 'Nghe và viết lại từ');
+    $('spellNext').disabled = !sDone;
+    $('spellHintBtn').disabled = sDone; $('spellReset').disabled = sDone;
+    const chars = sChars();
+    const ans = $('spellAnswer'); ans.innerHTML = '';
+    ans.classList.toggle('done', sDone);
+    const tilesBox = $('spellTiles'); tilesBox.innerHTML = ''; tilesBox.hidden = sMode !== 'scramble' || sDone;
+
+    chars.forEach((ch, i) => {
+      if (ch === ' ') { const g = document.createElement('span'); g.className = 'sgap'; ans.appendChild(g); return; }
+      if (!isLetter(ch)) { const f = document.createElement('span'); f.className = 'slot fixed'; f.textContent = ch; ans.appendChild(f); return; }
+      if (sDone) { const f = document.createElement('span'); f.className = 'slot ok'; f.textContent = ch; ans.appendChild(f); return; }
+      if (sMode === 'missing') {
+        if (!sHidden.has(i)) { const f = document.createElement('span'); f.className = 'slot fixed'; f.textContent = ch; ans.appendChild(f); return; }
+        const inp = document.createElement('input');
+        inp.className = 'slot input'; inp.maxLength = 2; inp.dataset.pos = i;
+        inp.autocomplete = 'off'; inp.autocapitalize = 'off'; inp.spellcheck = false; inp.setAttribute('autocorrect', 'off');
+        inp.setAttribute('aria-label', 'Chữ cái thứ ' + (i + 1));
+        inp.value = sVals[i] || '';
+        if (inp.value && sVals['bad' + i]) inp.classList.add('bad');
+        if (sVals['hint' + i]) { inp.classList.add('hinted'); inp.readOnly = true; }
+        inp.oninput = () => {
+          const v = [...inp.value].filter(isLetter).pop() || '';
+          inp.value = v; sVals[i] = v; delete sVals['bad' + i]; inp.classList.remove('bad');
+          if (v) focusNextInput(i);
+          if (allFilled()) checkSpell();
+        };
+        inp.onkeydown = e => {
+          if (e.key === 'Backspace' && !inp.value) { e.preventDefault(); focusPrevInput(i); }
+          else if (e.key === 'ArrowLeft') { e.preventDefault(); focusPrevInput(i, true); }
+          else if (e.key === 'ArrowRight') { e.preventDefault(); focusNextInput(i, true); }
+        };
+        ans.appendChild(inp);
+      } else {
+        const b = document.createElement('button');
+        b.className = 'slot drop-slot'; b.dataset.pos = i;
+        const t = sTiles.find(x => x.id === sAns[i]);
+        if (t) { b.textContent = t.ch; b.classList.add('filled'); if (t.bad) b.classList.add('bad'); if (t.hint) b.classList.add('hinted'); }
+        b.setAttribute('aria-label', t ? 'Chữ ' + t.ch + ', bấm để bỏ' : 'Ô trống');
+        b.onclick = () => { if (t && !t.hint) { freeSlot(i); renderSpell(); } };
+        ans.appendChild(b);
+      }
+    });
+
+    if (sMode === 'scramble' && !sDone) {
+      sTiles.forEach(t => {
+        const b = document.createElement('button');
+        b.className = 'tile'; b.textContent = t.ch;
+        if (t.used) b.classList.add('used');
+        b.disabled = t.used;
+        b.onclick = () => placeTile(t);
+        tilesBox.appendChild(b);
+      });
+    }
+    if (sMode === 'missing' && !sDone && !ans.contains(document.activeElement) && !$('viewSpell').hidden) {
+      const first = [...ans.querySelectorAll('input.slot')].find(x => !x.value) || ans.querySelector('input.slot');
+      if (first && matchMedia('(hover:hover)').matches) first.focus({ preventScroll: true });   // máy tính: tự focus; tablet: chạm để mở bàn phím
+    }
+  }
+  const inputs = () => [...$('spellAnswer').querySelectorAll('input.slot')];
+  function focusNextInput(pos, any) {
+    const list = inputs(); const i = list.findIndex(x => +x.dataset.pos === pos);
+    const nxt = list.slice(i + 1).find(x => any || !x.value) || (any ? null : list.find(x => !x.value));
+    if (nxt) nxt.focus();
+  }
+  function focusPrevInput(pos) {
+    const list = inputs(); const i = list.findIndex(x => +x.dataset.pos === pos);
+    if (i > 0) { const p = list[i - 1]; p.focus(); p.select(); }
+  }
+  function slotPositions() { return sChars().map((ch, i) => isLetter(ch) ? i : -1).filter(i => i >= 0); }
+  function allFilled() {
+    if (sMode === 'missing') return [...sHidden].every(i => sVals[i]);
+    return slotPositions().every(i => sAns[i]);
+  }
+  function placeTile(t) {
+    if (sDone || t.used) return;
+    const pos = slotPositions().find(i => !sAns[i]);
+    if (pos === undefined) return;
+    sAns[pos] = t.id; t.used = true;
+    sTiles.forEach(x => (x.bad = false));
+    renderSpell();
+    if (allFilled()) checkSpell();
+  }
+  function freeSlot(pos) {
+    const t = sTiles.find(x => x.id === sAns[pos]);
+    if (t) { t.used = false; t.bad = false; t.hint = false; }
+    delete sAns[pos];
+  }
+  function checkSpell() {
+    const chars = sChars();
+    let ok = true;
+    if (sMode === 'missing') {
+      sHidden.forEach(i => { if (!eqCh(sVals[i], chars[i])) { ok = false; sVals['bad' + i] = true; } });
+    } else {
+      slotPositions().forEach(i => { const t = sTiles.find(x => x.id === sAns[i]); if (!t || !eqCh(t.ch, chars[i])) { ok = false; if (t) t.bad = true; } });
+    }
+    if (ok) {
+      sDone = true; beep(true);
+      setTimeout(() => speak(sCur().word), 300);
+      spellMsg('Chính xác!', 'ok');
+      renderSpell();
+      clearTimeout(sTimer);
+      sTimer = setTimeout(() => { if (sDone && !$('viewSpell').hidden) spellGo(1); }, 2500);
+    } else {
+      beep(false);
+      spellMsg(sMode === 'missing' ? 'Chưa đúng, sửa các ô màu đỏ nhé' : 'Chưa đúng, bấm vào chữ màu đỏ để đổi', 'bad');
+      renderSpell();
+      const a = $('spellAnswer'); a.classList.remove('shake'); void a.offsetWidth; a.classList.add('shake');
+      if (sMode === 'missing') { const b = inputs().find(x => x.classList.contains('bad')); if (b) { b.focus(); b.select(); } }
+    }
+  }
+  function spellMsg(t, kind) { const m = $('spellMsg'); m.textContent = t; m.className = 'spell-msg ' + (kind || ''); }
+  function spellHint() {
+    if (sDone) return;
+    const chars = sChars();
+    if (sMode === 'missing') {
+      const pos = [...sHidden].sort((a, b) => a - b).find(i => !eqCh(sVals[i], chars[i]));
+      if (pos === undefined) return;
+      sVals[pos] = chars[pos]; sVals['hint' + pos] = true; delete sVals['bad' + pos];
+    } else {
+      const pos = slotPositions().find(i => { const t = sTiles.find(x => x.id === sAns[i]); return !t || !eqCh(t.ch, chars[i]); });
+      if (pos === undefined) return;
+      if (sAns[pos]) freeSlot(pos);
+      let t = sTiles.find(x => !x.used && eqCh(x.ch, chars[pos]));
+      if (!t) {                                   // chữ cần đang nằm sai chỗ khác -> lấy về
+        const q = slotPositions().find(i => { const x = sTiles.find(y => y.id === sAns[i]); return x && eqCh(x.ch, chars[pos]) && !eqCh(chars[i], chars[pos]); });
+        if (q !== undefined) { const id = sAns[q]; freeSlot(q); t = sTiles.find(x => x.id === id); }
+      }
+      if (!t) return;
+      sAns[pos] = t.id; t.used = true; t.hint = true;
+    }
+    spellMsg('');
+    renderSpell();
+    if (allFilled()) checkSpell();
+  }
+  function spellGo(d) {
+    if (!sDeck.length) return;
+    if (d > 0 && !sDone) {                        // chưa làm đúng thì không cho sang từ tiếp
+      const a = $('spellAnswer'); a.classList.remove('shake'); void a.offsetWidth; a.classList.add('shake');
+      spellMsg('Hoàn thành từ này trước nhé (có thể bấm Gợi ý)', 'bad');
+      return;
+    }
+    clearTimeout(sTimer);
+    sIdx = (sIdx + d + sDeck.length) % sDeck.length;
+    sFor = null; spellMsg(''); renderSpell();
+  }
+  $('spellPrev').onclick = () => spellGo(-1);
+  $('spellNext').onclick = () => spellGo(1);
+  $('spellHintBtn').onclick = spellHint;
+  $('spellReset').onclick = () => { sFor = null; spellMsg(''); renderSpell(); };
+  $('spellSay').onclick = () => { const c = sCur(); if (c) { const was = soundOn; soundOn = true; speak(c.word); soundOn = was; } };
+  $('spellMode').onchange = () => {
+    sMode = $('spellMode').value;
+    try { localStorage.setItem('fc-spell-mode', sMode); } catch (e) {}
+    sFor = null; spellMsg(''); renderSpell();
+  };
+  $('spellTopic').onchange = () => { sTopic = $('spellTopic').value; sDeck = []; sIdx = 0; sFor = null; spellMsg(''); spellSync(); };
+  document.addEventListener('keydown', e => {
+    if ($('viewSpell').hidden || sMode !== 'scramble' || sDone) return;
+    if (e.target.matches('input,select,textarea')) return;
+    if (e.key === 'Backspace') {                  // xoá chữ cuối cùng đã đặt
+      const filled = slotPositions().filter(i => sAns[i] && !sTiles.find(x => x.id === sAns[i]).hint);
+      if (filled.length) { freeSlot(filled.pop()); renderSpell(); }
+      e.preventDefault();
+    } else if (e.key.length === 1 && isLetter(e.key)) {
+      const t = sTiles.find(x => !x.used && eqCh(x.ch, e.key));
+      if (t) placeTile(t);
+    } else if (e.key === 'Enter' && sDone) spellGo(1);
+  });
+  window.addEventListener('hashchange', () => { if (location.hash === '#danh-van') renderSpell(); });
 
   function setStatus(id, msg, err) { const s = $(id); s.textContent = msg; s.classList.toggle('err', !!err); }
 })();

@@ -15,6 +15,7 @@
     <h1 class="brand">Flashcard</h1>
     <nav class="tabs" aria-label="Chế độ">
       <a href="#hoc" id="tabPlay">Học</a>
+      <a href="#danh-van" id="tabSpell">Đánh vần</a>
       <a href="#quan-ly" id="tabManage">Tạo thẻ</a>
     </nav>
   </header>
@@ -70,6 +71,43 @@
   </section>
 
   <!-- ============ MODULE 2: TẠO THẺ ============ -->
+  <!-- ============ MODULE 3: ĐÁNH VẦN ============ -->
+  <section id="viewSpell" hidden>
+    <div class="bar">
+      <label>Kiểu <select id="spellMode">
+        <option value="missing">Điền chữ thiếu</option>
+        <option value="scramble">Sắp xếp chữ cái</option>
+      </select></label>
+      <label>Chủ đề <select id="spellTopic"><option value="">Tất cả</option></select></label>
+      <span class="counter" id="spellCounter" style="margin-left:auto">0 / 0</span>
+    </div>
+    <div id="spellBox" hidden>
+      <div class="spell-card">
+        <div class="spell-hint">
+          <img id="spellImg" alt="Hình gợi ý" hidden>
+          <div class="spell-meta">
+            <p class="spell-meaning" id="spellMeaning"></p>
+            <button class="btn ghost spell-say" id="spellSay" aria-label="Nghe đọc từ">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/></svg>
+              Nghe</button>
+          </div>
+        </div>
+        <div class="spell-answer" id="spellAnswer"></div>
+        <div class="spell-tiles" id="spellTiles"></div>
+        <div class="spell-msg" id="spellMsg"></div>
+      </div>
+      <div class="controls">
+        <button class="cbtn" id="spellPrev" aria-label="Từ trước">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg></button>
+        <button class="btn ghost" id="spellReset">Làm lại</button>
+        <button class="btn" id="spellHintBtn">Gợi ý</button>
+        <button class="cbtn" id="spellNext" aria-label="Từ tiếp">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></button>
+      </div>
+    </div>
+    <div class="empty" id="spellEmpty"><strong>Đang tải từ…</strong><span></span></div>
+  </section>
+
   <section id="viewManage" hidden>
     <div class="panel" id="loginPanel">
       <h2>Đăng nhập để tạo thẻ</h2>
@@ -102,11 +140,23 @@
       </div>
 
       <div class="panel">
+        <h2>Thêm từ không cần ảnh</h2>
+        <p class="hint">Dùng cho phần Đánh vần (Học và Chọn đáp án chỉ dùng thẻ có ảnh). Có thể thêm ảnh sau trong danh sách.</p>
+        <form class="row" id="wordForm">
+          <input class="field" id="wfWord" placeholder="Từ tiếng Anh (vd: pencil)" required style="flex:1 1 160px">
+          <input class="field" id="wfMeaning" placeholder="Nghĩa (vd: bút chì)" style="flex:1 1 160px">
+          <input class="field" id="wfTopic" list="topicList" placeholder="Chủ đề" style="flex:1 1 120px">
+          <button class="btn" type="submit">Thêm từ</button>
+        </form>
+        <div class="status" id="wordStatus"></div>
+      </div>
+
+      <div class="panel">
         <div class="listhead">
           <h2>Bộ thẻ <span id="totalCount" class="muted"></span></h2>
           <label class="muted">Lọc <select class="field" id="manageTopic"><option value="">Tất cả</option></select></label>
         </div>
-        <p class="hint">Sửa từ hoặc chủ đề: gõ trực tiếp vào ô rồi nhấn Enter. Đổi ảnh: bấm vào ảnh hoặc kéo thả ảnh mới vào.</p>
+        <p class="hint">Sửa từ, nghĩa hoặc chủ đề: gõ trực tiếp vào ô rồi nhấn Enter. Đổi ảnh: bấm vào ảnh hoặc kéo thả ảnh mới vào.</p>
         <div class="list" id="list"></div>
         <div class="status" id="listStatus"></div>
       </div>

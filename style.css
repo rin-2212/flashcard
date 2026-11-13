@@ -198,3 +198,44 @@ body.quiz .stage{max-height:calc(100vh - 380px);max-height:calc(100dvh - 380px)}
 .thumb.over{outline:3px solid var(--sky)}
 @media (hover:none){ .thumb span{opacity:1;background:rgba(28,37,65,.45);align-items:end;padding-bottom:2px} }
 @media (max-width:560px){ .thumb{width:52px;height:40px} .thumb img{width:52px;height:40px} }
+
+/* ================= MODULE ĐÁNH VẦN ================= */
+.spell-card{background:var(--surface);border:3px solid var(--line);border-radius:22px;padding:18px;display:flex;flex-direction:column;align-items:center;gap:16px}
+.spell-hint{display:flex;align-items:center;justify-content:center;gap:18px;flex-wrap:wrap;width:100%}
+.spell-hint img{max-height:min(34vh,260px);max-width:min(100%,380px);object-fit:contain;background:#fff;border-radius:14px;border:1px solid var(--line)}
+.spell-meta{display:flex;flex-direction:column;align-items:center;gap:10px}
+.spell-meaning{margin:0;font-size:1.15rem;font-weight:600;color:var(--muted);text-align:center}
+.spell-meaning:empty{display:none}
+.spell-say{display:inline-flex;align-items:center;gap:6px}
+.spell-say svg{width:20px;height:20px}
+.spell-answer{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;row-gap:10px}
+.slot{width:clamp(40px,9vw,58px);height:clamp(48px,11vw,68px);border-radius:12px;display:grid;place-items:center;
+  font-family:"Baloo 2",system-ui,sans-serif;font-weight:800;font-size:clamp(1.6rem,6vw,2.4rem);line-height:1;
+  text-align:center;padding:0;border:2px solid var(--line);background:var(--bg);color:var(--ink)}
+.slot.fixed{border-color:transparent;background:transparent}
+.slot.input{border:2px dashed var(--sky);background:var(--surface);caret-color:var(--sky);text-transform:none}
+.slot.input:focus{outline:none;border-style:solid;box-shadow:0 0 0 3px rgba(31,166,209,.25)}
+.drop-slot{border:2px dashed var(--sky);background:var(--surface);cursor:pointer}
+.drop-slot.filled{border-style:solid;background:var(--sun);border-color:var(--sun);color:#231F20}
+.slot.bad,.drop-slot.filled.bad{border:2px solid #E5484D;background:rgba(229,72,77,.12);color:#E5484D}
+.slot.hinted,.drop-slot.filled.hinted{border-color:#9B8AFB;background:rgba(155,138,251,.15);color:var(--ink)}
+.slot.ok{border-color:#2DBE6C;background:rgba(45,190,108,.15);color:var(--ink)}
+.sgap{width:clamp(12px,3vw,24px)}
+.spell-tiles{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;min-height:56px}
+.tile{width:clamp(44px,10vw,60px);height:clamp(44px,10vw,60px);border-radius:14px;border:0;
+  background:var(--sky);color:#fff;font-family:"Baloo 2",system-ui,sans-serif;font-weight:800;font-size:clamp(1.5rem,5.5vw,2.2rem);
+  box-shadow:0 4px 0 var(--sky-deep);transition:transform .08s}
+.tile:active{transform:translateY(3px);box-shadow:0 1px 0 var(--sky-deep)}
+.tile.used{visibility:hidden}
+.spell-msg{min-height:1.5em;font-weight:700;text-align:center}
+.spell-msg.ok{color:#2DBE6C}
+.spell-msg.bad{color:#E5484D}
+#viewSpell .controls .btn{min-height:48px}
+@media (orientation:landscape) and (max-height:600px){
+  .spell-card{padding:10px;gap:10px}
+  .spell-hint img{max-height:30vh}
+}
+
+/* Thẻ chưa có ảnh trong danh sách */
+.thumb.noimg{border:2px dashed var(--line);background:var(--bg)}
+.thumb.noimg span{opacity:1;background:transparent;color:var(--muted);align-items:center;padding:0}
