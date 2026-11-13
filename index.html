@@ -23,13 +23,9 @@
   <section id="viewPlay">
     <div class="bar">
       <label>Chủ đề <select id="topicSel"><option value="">Tất cả</option></select></label>
-      <label>Xem tranh <select id="secsSel">
-        <option value="3">3 giây</option><option value="5">5 giây</option><option value="10" selected>10 giây</option>
+      <label>Mỗi bước <select id="secsSel">
+        <option value="5">5 giây</option><option value="10" selected>10 giây</option>
         <option value="15">15 giây</option><option value="20">20 giây</option>
-      </select></label>
-      <label>Hiện chữ <select id="wordSel">
-        <option value="1">1 giây</option><option value="2" selected>2 giây</option><option value="3">3 giây</option>
-        <option value="5">5 giây</option><option value="10">10 giây</option>
       </select></label>
       <span class="live" id="liveDot" title="Đang đồng bộ realtime"></span>
       <span class="counter" id="counter">0 / 0</span>
@@ -48,7 +44,7 @@
       <div class="progress"><i id="prog"></i></div>
       <div class="phase" id="phaseTxt"></div>
       <div class="controls">
-        <button class="cbtn small" id="shuffleBtn" aria-pressed="false" aria-label="Trộn thứ tự" title="Trộn thứ tự">
+        <button class="cbtn small" id="shuffleBtn" aria-pressed="true" aria-label="Trộn thứ tự" title="Trộn thứ tự">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg></button>
         <button class="cbtn" id="prevBtn" aria-label="Thẻ trước" title="Thẻ trước (←)">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg></button>

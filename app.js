@@ -12,7 +12,7 @@
   let cards = [];          // [{id, word, topic, image_path, sort_order, url}]
   let deck = [];           // card ids in play order
   let idx = 0, phase = 0, playing = true, elapsed = 0, lastT = 0;
-  let shuffle = false, topic = '', secs = 10, wordSecs = 2;
+  let shuffle = true, topic = '', secs = 10, wordSecs = 2;
   const zoom = { s: 1, x: 0, y: 0 };
 
   try {
