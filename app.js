@@ -123,10 +123,15 @@
     $('cardWord').textContent = c.word;
     $('stage').classList.toggle('reveal', phase === 1);
     $('counter').textContent = (idx + 1) + ' / ' + deck.length;
-    $('phaseTxt').textContent = zoom.s > 1 ? 'Đang phóng to, đã tạm dừng' : (phase === 0 ? 'Nhìn tranh và đoán từ…' : 'Từ mới');
+    updatePhaseText();
     const n = cards.find(x => x.id === deck[(idx + 1) % deck.length]);
     if (n) { const p = new Image(); p.src = n.url; }
     drawProgress();
+  }
+  function updatePhaseText() {
+    $('phaseTxt').textContent = zoom.s > 1 ? 'Đang phóng to, đã tạm dừng'
+      : !playing ? 'Đã tạm dừng, bấm ▶ để tiếp tục'
+      : (phase === 0 ? 'Nhìn tranh và đoán từ…' : 'Từ mới');
   }
   const drawProgress = () => { $('prog').style.width = Math.min(100, elapsed / (phaseSecs() * 10)) + '%'; };
 
@@ -140,8 +145,12 @@
   }
   function setPlaying(v) {
     playing = v;
-    $('icoPause').hidden = !v; $('icoPlay').hidden = v;
+    // SVG không có thuộc tính .hidden, phải dùng attribute
+    $('icoPause').toggleAttribute('hidden', !v);
+    $('icoPlay').toggleAttribute('hidden', v);
     $('playBtn').setAttribute('aria-label', v ? 'Tạm dừng' : 'Phát');
+    $('stage').classList.toggle('paused', !v);
+    updatePhaseText();
   }
   function loop(t) {
     const dt = t - lastT; lastT = t;
