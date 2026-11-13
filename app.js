@@ -12,11 +12,20 @@
   let cards = [];          // [{id, word, topic, image_path, sort_order, url}]
   let deck = [];           // card ids in play order
   let idx = 0, phase = 0, playing = true, elapsed = 0, lastT = 0;
-  let shuffle = false, topic = '', secs = 10;
+  let shuffle = true, topic = '', secs = 10, wordSecs = 2;
+  let quiz = false, answered = false, quizFor = null, quizOpts = [], wrong = new Set();
   const zoom = { s: 1, x: 0, y: 0 };
 
-  try { const s = parseInt(localStorage.getItem('fc-secs'), 10); if ([5, 10, 15, 20].includes(s)) secs = s; } catch (e) {}
+  try {
+    const s = parseInt(localStorage.getItem('fc-secs'), 10); if ([3, 5, 10, 15, 20].includes(s)) secs = s;
+    const w = parseInt(localStorage.getItem('fc-word-secs'), 10); if ([1, 2, 3, 5, 10].includes(w)) wordSecs = w;
+  } catch (e) {}
   $('secsSel').value = String(secs);
+  $('wordSel').value = String(wordSecs);
+  try { quiz = localStorage.getItem('fc-mode') === 'quiz'; } catch (e) {}
+  $('modeSel').value = quiz ? 'quiz' : 'view';
+  document.body.classList.toggle('quiz', quiz);
+  const phaseSecs = () => (phase === 0 ? secs : wordSecs);
 
   /* ======================= ROUTING ======================= */
   function route() {
@@ -44,15 +53,16 @@
   async function loadCards() {
     if (loading) return loading;           // gộp các lần gọi dồn dập
     loading = (async () => {
+      // Tải theo từng đợt 1000 thẻ để không bị giới hạn số lượng
       let data = [], error = null;
-for (let from = 0; ; from += 1000) {
-  const r = await sb.from('cards').select('*')
-    .order('sort_order', { ascending: true })
-    .range(from, from + 999);
-  if (r.error) { error = r.error; break; }
-  data = data.concat(r.data);
-  if (r.data.length < 1000) break;
-};
+      for (let from = 0; ; from += 1000) {
+        const r = await sb.from('cards').select('*')
+          .order('sort_order', { ascending: true })
+          .range(from, from + 999);
+        if (r.error) { error = r.error; break; }
+        data = data.concat(r.data);
+        if (r.data.length < 1000) break;
+      }
       if (error) { showEmpty('Không tải được bộ thẻ', error.message); return; }
       const keep = deck[idx];
       cards = data.map(c => ({ ...c, url: imgUrl(c.image_path) }));
@@ -102,7 +112,7 @@ for (let from = 0; ; from += 1000) {
     } else deck = ids;
     const k = keepId ? deck.indexOf(keepId) : -1;
     if (k >= 0) idx = k;
-    else { idx = Math.min(idx, Math.max(0, deck.length - 1)); phase = 0; elapsed = 0; resetZoom(); }
+    else { idx = Math.min(idx, Math.max(0, deck.length - 1)); phase = 0; elapsed = 0; answered = false; resetZoom(); }
     renderCard();
   }
   function reshuffle() {
@@ -126,31 +136,104 @@ for (let from = 0; ; from += 1000) {
     $('cardWord').textContent = c.word;
     $('stage').classList.toggle('reveal', phase === 1);
     $('counter').textContent = (idx + 1) + ' / ' + deck.length;
-    $('phaseTxt').textContent = zoom.s > 1 ? 'Đang phóng to, đã tạm dừng' : (phase === 0 ? 'Nhìn tranh và đoán từ…' : 'Từ mới');
+    renderChoices(c);
+    updatePhaseText();
     const n = cards.find(x => x.id === deck[(idx + 1) % deck.length]);
     if (n) { const p = new Image(); p.src = n.url; }
     drawProgress();
   }
-  const drawProgress = () => { $('prog').style.width = Math.min(100, elapsed / (secs * 10)) + '%'; };
+  function updatePhaseText() {
+    $('phaseTxt').textContent = zoom.s > 1 ? 'Đang phóng to, đã tạm dừng'
+      : (quiz && !answered) ? 'Chọn từ đúng với tranh'
+      : (quiz && answered) ? (playing ? 'Chính xác!' : 'Chính xác! Bấm › để sang thẻ tiếp')
+      : !playing ? 'Đã tạm dừng, bấm ▶ để tiếp tục'
+      : (phase === 0 ? 'Nhìn tranh và đoán từ…' : 'Từ mới');
+  }
+  const drawProgress = () => { $('prog').style.width = Math.min(100, elapsed / (phaseSecs() * 10)) + '%'; };
 
   function go(delta) {
     if (!deck.length) return;
+    if (quiz && delta > 0 && !answered) { nudge(); return; }   // chưa chọn đúng thì không cho next
     idx = (idx + delta + deck.length) % deck.length;
-    phase = 0; elapsed = 0; resetZoom(); renderCard();
+    phase = 0; elapsed = 0; answered = false; quizFor = null; resetZoom(); renderCard();
   }
   function advance() {
+    if (quiz && phase === 0) return;                            // chế độ chọn: phải chọn đáp án
     if (phase === 0) { phase = 1; elapsed = 0; renderCard(); } else go(1);
   }
+
+  /* ---------- Chế độ CHỌN ĐÁP ÁN ---------- */
+  const ICON_OK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>';
+  const ICON_BAD = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>';
+  const norm = w => (w || '').trim().toLowerCase();
+  const shuffled = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+
+  function buildOptions(c) {
+    const seen = new Set([norm(c.word)]), pool = [];
+    const add = list => { for (const x of shuffled(list)) { const k = norm(x.word); if (k && !seen.has(k)) { seen.add(k); pool.push(x.word.trim()); } } };
+    add(cards.filter(x => deck.includes(x.id)));   // ưu tiên từ cùng chủ đề đang học
+    if (pool.length < 3) add(cards);
+    return shuffled([c.word.trim(), ...pool.slice(0, 3)]);
+  }
+  function renderChoices(c) {
+    const box = $('choices');
+    box.hidden = !quiz;
+    $('nextBtn').disabled = quiz && !answered;
+    if (!quiz) return;
+    if (quizFor !== c.id) { quizFor = c.id; quizOpts = buildOptions(c); wrong = new Set(); }
+    box.innerHTML = '';
+    quizOpts.forEach((w, i) => {
+      const b = document.createElement('button');
+      b.className = 'choice';
+      const ok = answered && norm(w) === norm(c.word), bad = wrong.has(norm(w));
+      if (ok) b.classList.add('ok');
+      if (bad) b.classList.add('bad');
+      b.disabled = answered || bad;
+      b.innerHTML = `<span class="key">${i + 1}</span><span class="txt"></span><span class="mark">${ok ? ICON_OK : bad ? ICON_BAD : ''}</span>`;
+      b.querySelector('.txt').textContent = w;
+      b.onclick = () => pick(w, b);
+      box.appendChild(b);
+    });
+  }
+  function pick(w, btn) {
+    const c = cur();
+    if (!c || answered) return;
+    if (norm(w) === norm(c.word)) {
+      answered = true; phase = 1; elapsed = 0;     // hiện từ trên tranh, rồi tự sang thẻ nếu đang phát
+      renderCard();
+    } else {
+      wrong.add(norm(w));
+      renderCard();
+      const b = [...$('choices').children].find(x => x.querySelector('.txt').textContent === w);
+      if (b) { b.classList.add('shake'); setTimeout(() => b.classList.remove('shake'), 450); }
+    }
+  }
+  function nudge() {
+    const box = $('choices');
+    box.classList.remove('shake'); void box.offsetWidth; box.classList.add('shake');
+    setTimeout(() => box.classList.remove('shake'), 450);
+  }
+  $('modeSel').onchange = () => {
+    quiz = $('modeSel').value === 'quiz';
+    try { localStorage.setItem('fc-mode', quiz ? 'quiz' : 'view'); } catch (e) {}
+    document.body.classList.toggle('quiz', quiz);
+    phase = 0; elapsed = 0; answered = false; quizFor = null;
+    renderCard();
+  };
   function setPlaying(v) {
     playing = v;
-    $('icoPause').hidden = !v; $('icoPlay').hidden = v;
+    // SVG không có thuộc tính .hidden, phải dùng attribute
+    $('icoPause').toggleAttribute('hidden', !v);
+    $('icoPlay').toggleAttribute('hidden', v);
     $('playBtn').setAttribute('aria-label', v ? 'Tạm dừng' : 'Phát');
+    $('stage').classList.toggle('paused', !v);
+    updatePhaseText();
   }
   function loop(t) {
     const dt = t - lastT; lastT = t;
-    if (playing && deck.length && !$('viewPlay').hidden && !document.hidden) {
+    if (playing && deck.length && !$('viewPlay').hidden && !document.hidden && !(quiz && phase === 0)) {
       elapsed += dt;
-      if (elapsed >= secs * 1000) advance(); else drawProgress();
+      if (elapsed >= phaseSecs() * 1000) advance(); else drawProgress();
     }
     requestAnimationFrame(loop);
   }
@@ -164,6 +247,11 @@ for (let from = 0; ; from += 1000) {
   $('secsSel').onchange = () => {
     secs = parseInt($('secsSel').value, 10);
     try { localStorage.setItem('fc-secs', String(secs)); } catch (e) {}
+    drawProgress();
+  };
+  $('wordSel').onchange = () => {
+    wordSecs = parseInt($('wordSel').value, 10);
+    try { localStorage.setItem('fc-word-secs', String(wordSecs)); } catch (e) {}
     drawProgress();
   };
 
@@ -237,6 +325,7 @@ for (let from = 0; ; from += 1000) {
     else if (e.key === '+' || e.key === '=') setZoom(zoom.s * 1.4);
     else if (e.key === '-') setZoom(zoom.s / 1.4);
     else if (e.key === '0') setZoom(1);
+    else if (quiz && /^[1-4]$/.test(e.key)) { const b = $('choices').children[+e.key - 1]; if (b && !b.disabled) b.click(); }
   });
 
   /* ======================= MODULE 2: AUTH ======================= */
@@ -259,7 +348,10 @@ for (let from = 0; ; from += 1000) {
 
   /* ======================= MODULE 2: THÊM THẺ ======================= */
   let pending = []; // {file, url, word}
-  const wordFromName = n => n.replace(/\.[^.]+$/, '').replace(/^\d+[\s._-]*/, '').replace(/[_-]+/g, ' ').trim();
+  const wordFromName = n => {
+    const w = n.replace(/\.[^.]+$/, '').replace(/^\d+[\s._-]*/, '').replace(/[_-]+/g, ' ').trim();
+    return (/^[0-9a-f]{12,}$/i.test(w) || /\d{4,}/.test(w) || w.length > 30) ? '' : w;
+  };
 
   function addFiles(list) {
     for (const f of list) if (f.type.startsWith('image/')) pending.push({ file: f, url: URL.createObjectURL(f), word: wordFromName(f.name) });
@@ -269,7 +361,7 @@ for (let from = 0; ; from += 1000) {
     const box = $('pending'); box.innerHTML = '';
     pending.forEach((p, i) => {
       const el = document.createElement('div'); el.className = 'item';
-      el.innerHTML = `<img alt=""><div class="fields"><input class="field" aria-label="Từ mới" placeholder="Từ mới"></div><div class="acts"><button class="ibtn del" aria-label="Bỏ ảnh này">${ICON_DEL}</button></div>`;
+      el.innerHTML = `<img alt=""><div class="fields"><input class="field" aria-label="Từ mới" placeholder="✏️ Nhập từ mới (vd: gloves)"></div><div class="acts"><button class="ibtn del" aria-label="Bỏ ảnh này">${ICON_DEL}</button></div>`;
       el.querySelector('img').src = p.url;
       const inp = el.querySelector('input'); inp.value = p.word; inp.oninput = () => (p.word = inp.value);
       el.querySelector('button').onclick = () => { URL.revokeObjectURL(p.url); pending.splice(i, 1); renderPending(); };

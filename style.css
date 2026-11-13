@@ -143,3 +143,44 @@ header{display:flex;align-items:center;justify-content:space-between;gap:12px;fl
   opacity:0;transform:scale(.8);transition:opacity .2s,transform .2s;pointer-events:none}
 .stage.paused::after{opacity:1;transform:scale(1)}
 .stage.paused ~ .progress i{opacity:.5}
+
+/* ================= Chế độ CHỌN ĐÁP ÁN ================= */
+.choices{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:10px}
+.choice{position:relative;display:flex;align-items:center;gap:10px;min-height:56px;padding:8px 12px;
+  border-radius:16px;border:2px solid var(--line);background:var(--surface);text-align:left;
+  font-family:"Baloo 2",system-ui,sans-serif;font-weight:800;font-size:clamp(1.15rem,3.2vw,1.6rem);line-height:1.1;
+  transition:border-color .15s,background .15s,transform .1s}
+.choice:hover:not(:disabled){border-color:var(--sky)}
+.choice:active:not(:disabled){transform:scale(.98)}
+.choice .key{flex:none;width:26px;height:26px;border-radius:8px;display:grid;place-items:center;
+  font-family:"Be Vietnam Pro",system-ui,sans-serif;font-size:.8rem;font-weight:700;background:var(--bg);color:var(--muted)}
+.choice .txt{flex:1;min-width:0;overflow-wrap:anywhere}
+.choice .mark{flex:none;width:34px;height:34px;border-radius:50%;display:grid;place-items:center}
+.choice .mark:empty{display:none}
+.choice .mark svg{width:20px;height:20px}
+.choice:disabled{cursor:default}
+.choice.ok{border-color:#2DBE6C;background:rgba(45,190,108,.12)}
+.choice.ok .mark{background:#2DBE6C;color:#fff;box-shadow:0 0 0 4px rgba(45,190,108,.25)}
+.choice.bad{border-color:#E5484D;color:var(--muted);opacity:.85}
+.choice.bad .txt{text-decoration:line-through}
+.choice.bad .mark{background:#E5484D;color:#fff}
+.shake{animation:shake .4s}
+@keyframes shake{20%,60%{transform:translateX(-6px)}40%,80%{transform:translateX(6px)}}
+.cbtn:disabled{opacity:.35;cursor:not-allowed}
+body.quiz .progress{visibility:hidden}
+body.quiz .stage.reveal ~ .progress{visibility:visible}
+body.quiz .stage{max-height:calc(100vh - 380px);max-height:calc(100dvh - 380px)}
+@media (min-width:760px){ .choices{grid-template-columns:repeat(4,1fr)} body.quiz .stage{max-height:calc(100vh - 330px);max-height:calc(100dvh - 330px)} }
+@media (max-width:600px) and (orientation:portrait){
+  body.quiz .stage{max-height:calc(100vh - 420px);max-height:calc(100dvh - 420px)}
+  .choice{min-height:50px;padding:6px 10px}
+}
+@media (orientation:landscape) and (max-height:600px){
+  .choices{grid-column:1;grid-row:3;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:6px}
+  .controls{grid-row:1/4}
+  .choice{min-height:40px;padding:4px 8px;font-size:1.05rem;border-radius:12px}
+  .choice .key{display:none}
+  .choice .mark{width:26px;height:26px}
+  body.quiz .stage{height:calc(100vh - 160px);height:calc(100dvh - 160px)}
+}
+@media (prefers-reduced-motion: reduce){ .shake{animation:none} }
