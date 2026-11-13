@@ -207,6 +207,7 @@
       renderCard();
     } else {
       beep(false);
+      setTimeout(() => speak(w), 300);                    // đọc cả từ chọn sai
       wrong.add(norm(w));
       renderCard();
       const b = [...$('choices').children].find(x => x.querySelector('.txt').textContent === w);
@@ -231,18 +232,32 @@
   const tts = 'speechSynthesis' in window;
   function pickVoice() {
     if (!tts) return;
-    const vs = speechSynthesis.getVoices().filter(v => /^en(-|_|$)/i.test(v.lang));
-    voice = vs.find(v => /en-US/i.test(v.lang) && /google|samantha|aria|jenny|natural/i.test(v.name))
-         || vs.find(v => /en-US/i.test(v.lang)) || vs.find(v => /en-GB/i.test(v.lang)) || vs[0] || null;
+    const vs = speechSynthesis.getVoices().filter(v => /^en([-_]|$)/i.test(v.lang));
+    voice = vs.find(v => /en[-_]US/i.test(v.lang) && /google|samantha|aria|jenny|natural/i.test(v.name))
+         || vs.find(v => /en[-_]US/i.test(v.lang)) || vs.find(v => /en[-_]GB/i.test(v.lang)) || vs[0] || null;
   }
   if (tts) { pickVoice(); speechSynthesis.onvoiceschanged = pickVoice; }
+  // iPad/iPhone và một số tablet: phải "mở khoá" âm thanh bằng lần chạm đầu tiên
+  const unlockAudio = () => {
+    if (tts) { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; speechSynthesis.speak(u); }
+    try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); actx.resume(); } catch (e) {}
+    window.removeEventListener('pointerdown', unlockAudio, true);
+    window.removeEventListener('keydown', unlockAudio, true);
+  };
+  window.addEventListener('pointerdown', unlockAudio, true);
+  window.addEventListener('keydown', unlockAudio, true);
   function speak(text) {
     if (!soundOn || !tts || !text) return;
-    speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(text);
-    u.lang = voice ? voice.lang : 'en-US'; if (voice) u.voice = voice;
-    u.rate = 0.85;
-    speechSynthesis.speak(u);
+    const say = () => {
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = 'en-US'; if (voice) u.voice = voice;
+      u.rate = 0.85;
+      speechSynthesis.speak(u);
+    };
+    if (speechSynthesis.paused) speechSynthesis.resume();     // Chrome Android đôi khi bị kẹt "paused"
+    // Chrome Android hay bỏ qua câu nói nếu gọi speak() ngay sau cancel()
+    if (speechSynthesis.speaking || speechSynthesis.pending) { speechSynthesis.cancel(); setTimeout(say, 150); }
+    else say();
   }
   function beep(ok) {
     if (!soundOn) return;
