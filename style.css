@@ -96,3 +96,43 @@ header{display:flex;align-items:center;justify-content:space-between;gap:12px;fl
   .cbtn{width:50px;height:50px}.cbtn.main{width:60px;height:60px}
 }
 @media (prefers-reduced-motion: reduce){ .pan img,.word{transition:none} }
+
+/* ================= RESPONSIVE: điện thoại / tablet ================= */
+/* Tranh không bao giờ cao quá màn hình */
+.stage{width:100%;max-height:calc(100vh - 260px);max-height:calc(100dvh - 260px);min-height:200px}
+
+/* Điện thoại dọc: tranh vuông hơn cho to */
+@media (max-width:600px) and (orientation:portrait){
+  .wrap{padding:12px}
+  .stage{width:100%;aspect-ratio:4/5;max-height:calc(100vh - 290px);max-height:calc(100dvh - 290px)}
+  .bar{gap:8px;font-size:.88rem}
+  .word{font-size:clamp(2rem,11vw,3.5rem)}
+}
+
+/* Màn hình ngang thấp (điện thoại xoay ngang, tablet nhỏ):
+   tranh chiếm hết chiều cao, nút điều khiển dọc bên phải */
+@media (orientation:landscape) and (max-height:600px){
+  .wrap{max-width:none;padding:6px 12px}
+  header{margin-bottom:4px}
+  .brand{font-size:1.2rem}
+  .tabs a{padding:3px 12px;font-size:.85rem}
+  .bar{margin-bottom:6px;font-size:.85rem;gap:8px}
+  .bar select{padding:2px 6px}
+
+  #playerBox:not([hidden]){display:grid;grid-template-columns:1fr auto;column-gap:12px;align-items:center}
+  .stage{grid-column:1;grid-row:1;aspect-ratio:auto;width:100%;
+    height:calc(100vh - 110px);height:calc(100dvh - 110px);max-height:none;min-height:160px;border-radius:16px}
+  .progress{grid-column:1;grid-row:2;margin-top:6px;height:6px}
+  .phase{display:none}
+  .controls{grid-column:2;grid-row:1/3;flex-direction:column;flex-wrap:nowrap;margin:0;gap:8px}
+  .cbtn{width:44px;height:44px}.cbtn svg{width:22px;height:22px}
+  .cbtn.main{width:54px;height:54px}
+  .cbtn.small{width:38px;height:38px}
+  .word{font-size:clamp(1.8rem,13vh,4rem)}
+  .zbtn{min-width:32px;height:32px;font-size:1rem}
+}
+
+/* Tablet ngang (iPad...): giới hạn để thấy đủ tranh + nút */
+@media (orientation:landscape) and (min-height:601px) and (max-width:1366px){
+  .stage{max-height:calc(100vh - 260px);max-height:calc(100dvh - 260px)}
+}
