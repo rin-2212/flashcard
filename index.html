@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Flashcard tiếng Anh</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;800&family=Be+Vietnam+Pro:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1 class="brand">Flashcard</h1>
+    <nav class="tabs" aria-label="Chế độ">
+      <a href="#hoc" id="tabPlay">Học</a>
+      <a href="#quan-ly" id="tabManage">Tạo thẻ</a>
+    </nav>
+  </header>
+
+  <!-- ============ MODULE 1: HỌC ============ -->
+  <section id="viewPlay">
+    <div class="bar">
+      <label>Chủ đề <select id="topicSel"><option value="">Tất cả</option></select></label>
+      <label>Mỗi bước <select id="secsSel">
+        <option value="5">5 giây</option><option value="10" selected>10 giây</option>
+        <option value="15">15 giây</option><option value="20">20 giây</option>
+      </select></label>
+      <span class="live" id="liveDot" title="Đang đồng bộ realtime"></span>
+      <span class="counter" id="counter">0 / 0</span>
+    </div>
+
+    <div id="playerBox" hidden>
+      <div class="stage" id="stage">
+        <div class="pan" id="pan"><img id="cardImg" alt="" draggable="false"></div>
+        <div class="word" id="cardWord"></div>
+        <div class="zoombar">
+          <button class="zbtn" id="zoomIn"  aria-label="Phóng to" title="Phóng to (+)">+</button>
+          <button class="zbtn" id="zoomOut" aria-label="Thu nhỏ" title="Thu nhỏ (−)">−</button>
+          <button class="zbtn" id="zoomReset" aria-label="Về kích thước gốc" title="Về gốc (0)">1×</button>
+        </div>
+      </div>
+      <div class="progress"><i id="prog"></i></div>
+      <div class="phase" id="phaseTxt"></div>
+      <div class="controls">
+        <button class="cbtn small" id="shuffleBtn" aria-pressed="false" aria-label="Trộn thứ tự" title="Trộn thứ tự">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg></button>
+        <button class="cbtn" id="prevBtn" aria-label="Thẻ trước" title="Thẻ trước (←)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg></button>
+        <button class="cbtn main" id="playBtn" aria-label="Tạm dừng" title="Phát / dừng (Space)">
+          <svg id="icoPause" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
+          <svg id="icoPlay" viewBox="0 0 24 24" fill="currentColor" hidden><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.5-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5Z"/></svg></button>
+        <button class="cbtn" id="nextBtn" aria-label="Thẻ tiếp" title="Thẻ tiếp (→)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></button>
+        <button class="cbtn small" id="fsBtn" aria-label="Toàn màn hình" title="Toàn màn hình (F)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+      </div>
+    </div>
+    <div class="empty" id="emptyPlay"><strong id="emptyTitle">Đang tải thẻ…</strong><span id="emptyMsg"></span></div>
+  </section>
+
+  <!-- ============ MODULE 2: TẠO THẺ ============ -->
+  <section id="viewManage" hidden>
+    <div class="panel" id="loginPanel">
+      <h2>Đăng nhập để tạo thẻ</h2>
+      <p class="hint">Dùng tài khoản bạn đã tạo trong Supabase → Authentication → Users.</p>
+      <form class="row" id="loginForm">
+        <input class="field" type="email" id="email" placeholder="Email" required autocomplete="username">
+        <input class="field" type="password" id="password" placeholder="Mật khẩu" required autocomplete="current-password">
+        <button class="btn" type="submit">Đăng nhập</button>
+      </form>
+      <div class="status" id="loginStatus"></div>
+    </div>
+
+    <div id="editor" hidden>
+      <div class="panel">
+        <div class="listhead">
+          <h2>Thêm thẻ mới</h2>
+          <button class="btn ghost" id="logoutBtn">Đăng xuất</button>
+        </div>
+        <p class="hint">Chọn một hoặc nhiều ảnh. Tên file được điền sẵn làm từ mới, bạn sửa lại nếu cần.</p>
+        <div class="drop" id="drop" tabindex="0" role="button"><strong>Chọn ảnh</strong> hoặc kéo thả ảnh vào đây</div>
+        <input type="file" id="fileIn" accept="image/*" multiple hidden>
+        <div class="pending" id="pending"></div>
+        <div class="row" style="margin-top:12px" id="pendingActions" hidden>
+          <input class="field" id="newTopic" list="topicList" placeholder="Chủ đề (vd: Unit 3)" style="flex:1 1 180px">
+          <datalist id="topicList"></datalist>
+          <button class="btn ghost" id="clearPending">Bỏ chọn</button>
+          <button class="btn" id="savePending">Lưu thẻ</button>
+        </div>
+        <div class="status" id="addStatus"></div>
+      </div>
+
+      <div class="panel">
+        <div class="listhead">
+          <h2>Bộ thẻ <span id="totalCount" class="muted"></span></h2>
+          <label class="muted">Lọc <select class="field" id="manageTopic"><option value="">Tất cả</option></select></label>
+        </div>
+        <div class="list" id="list"></div>
+        <div class="status" id="listStatus"></div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js"></script>
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
