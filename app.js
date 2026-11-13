@@ -12,16 +12,11 @@
   let cards = [];          // [{id, word, topic, image_path, sort_order, url}]
   let deck = [];           // card ids in play order
   let idx = 0, phase = 0, playing = true, elapsed = 0, lastT = 0;
-  let shuffle = true, topic = '', secs = 10, wordSecs = 2;
+  let shuffle = false, topic = '', secs = 10;
   const zoom = { s: 1, x: 0, y: 0 };
 
-  try {
-    const s = parseInt(localStorage.getItem('fc-secs'), 10); if ([3, 5, 10, 15, 20].includes(s)) secs = s;
-    const w = parseInt(localStorage.getItem('fc-word-secs'), 10); if ([1, 2, 3, 5, 10].includes(w)) wordSecs = w;
-  } catch (e) {}
+  try { const s = parseInt(localStorage.getItem('fc-secs'), 10); if ([5, 10, 15, 20].includes(s)) secs = s; } catch (e) {}
   $('secsSel').value = String(secs);
-  $('wordSel').value = String(wordSecs);
-  const phaseSecs = () => (phase === 0 ? secs : wordSecs);
 
   /* ======================= ROUTING ======================= */
   function route() {
@@ -49,7 +44,15 @@
   async function loadCards() {
     if (loading) return loading;           // gộp các lần gọi dồn dập
     loading = (async () => {
-      const { data, error } = await sb.from('cards').select('*').order('sort_order', { ascending: true });
+      let data = [], error = null;
+for (let from = 0; ; from += 1000) {
+  const r = await sb.from('cards').select('*')
+    .order('sort_order', { ascending: true })
+    .range(from, from + 999);
+  if (r.error) { error = r.error; break; }
+  data = data.concat(r.data);
+  if (r.data.length < 1000) break;
+};
       if (error) { showEmpty('Không tải được bộ thẻ', error.message); return; }
       const keep = deck[idx];
       cards = data.map(c => ({ ...c, url: imgUrl(c.image_path) }));
@@ -123,17 +126,12 @@
     $('cardWord').textContent = c.word;
     $('stage').classList.toggle('reveal', phase === 1);
     $('counter').textContent = (idx + 1) + ' / ' + deck.length;
-    updatePhaseText();
+    $('phaseTxt').textContent = zoom.s > 1 ? 'Đang phóng to, đã tạm dừng' : (phase === 0 ? 'Nhìn tranh và đoán từ…' : 'Từ mới');
     const n = cards.find(x => x.id === deck[(idx + 1) % deck.length]);
     if (n) { const p = new Image(); p.src = n.url; }
     drawProgress();
   }
-  function updatePhaseText() {
-    $('phaseTxt').textContent = zoom.s > 1 ? 'Đang phóng to, đã tạm dừng'
-      : !playing ? 'Đã tạm dừng, bấm ▶ để tiếp tục'
-      : (phase === 0 ? 'Nhìn tranh và đoán từ…' : 'Từ mới');
-  }
-  const drawProgress = () => { $('prog').style.width = Math.min(100, elapsed / (phaseSecs() * 10)) + '%'; };
+  const drawProgress = () => { $('prog').style.width = Math.min(100, elapsed / (secs * 10)) + '%'; };
 
   function go(delta) {
     if (!deck.length) return;
@@ -145,18 +143,14 @@
   }
   function setPlaying(v) {
     playing = v;
-    // SVG không có thuộc tính .hidden, phải dùng attribute
-    $('icoPause').toggleAttribute('hidden', !v);
-    $('icoPlay').toggleAttribute('hidden', v);
+    $('icoPause').hidden = !v; $('icoPlay').hidden = v;
     $('playBtn').setAttribute('aria-label', v ? 'Tạm dừng' : 'Phát');
-    $('stage').classList.toggle('paused', !v);
-    updatePhaseText();
   }
   function loop(t) {
     const dt = t - lastT; lastT = t;
     if (playing && deck.length && !$('viewPlay').hidden && !document.hidden) {
       elapsed += dt;
-      if (elapsed >= phaseSecs() * 1000) advance(); else drawProgress();
+      if (elapsed >= secs * 1000) advance(); else drawProgress();
     }
     requestAnimationFrame(loop);
   }
@@ -170,11 +164,6 @@
   $('secsSel').onchange = () => {
     secs = parseInt($('secsSel').value, 10);
     try { localStorage.setItem('fc-secs', String(secs)); } catch (e) {}
-    drawProgress();
-  };
-  $('wordSel').onchange = () => {
-    wordSecs = parseInt($('wordSel').value, 10);
-    try { localStorage.setItem('fc-word-secs', String(wordSecs)); } catch (e) {}
     drawProgress();
   };
 
@@ -270,10 +259,7 @@
 
   /* ======================= MODULE 2: THÊM THẺ ======================= */
   let pending = []; // {file, url, word}
-  const wordFromName = n => {
-    const w = n.replace(/\.[^.]+$/, '').replace(/^\d+[\s._-]*/, '').replace(/[_-]+/g, ' ').trim();
-    return (/^[0-9a-f]{12,}$/i.test(w) || /\d{4,}/.test(w) || w.length > 30) ? '' : w;
-  };
+  const wordFromName = n => n.replace(/\.[^.]+$/, '').replace(/^\d+[\s._-]*/, '').replace(/[_-]+/g, ' ').trim();
 
   function addFiles(list) {
     for (const f of list) if (f.type.startsWith('image/')) pending.push({ file: f, url: URL.createObjectURL(f), word: wordFromName(f.name) });
@@ -283,7 +269,7 @@
     const box = $('pending'); box.innerHTML = '';
     pending.forEach((p, i) => {
       const el = document.createElement('div'); el.className = 'item';
-      el.innerHTML = `<img alt=""><div class="fields"><input class="field" aria-label="Từ mới" placeholder="✏️ Nhập từ mới (vd: gloves)"></div><div class="acts"><button class="ibtn del" aria-label="Bỏ ảnh này">${ICON_DEL}</button></div>`;
+      el.innerHTML = `<img alt=""><div class="fields"><input class="field" aria-label="Từ mới" placeholder="Từ mới"></div><div class="acts"><button class="ibtn del" aria-label="Bỏ ảnh này">${ICON_DEL}</button></div>`;
       el.querySelector('img').src = p.url;
       const inp = el.querySelector('input'); inp.value = p.word; inp.oninput = () => (p.word = inp.value);
       el.querySelector('button').onclick = () => { URL.revokeObjectURL(p.url); pending.splice(i, 1); renderPending(); };
