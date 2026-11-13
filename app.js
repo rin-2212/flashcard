@@ -135,6 +135,9 @@
     img.alt = phase === 1 ? c.word : 'Hình minh hoạ, đoán từ tiếng Anh';
     $('cardWord').textContent = c.word;
     $('stage').classList.toggle('reveal', phase === 1);
+    const key = c.id + ':' + idx + ':' + phase;          // đọc từ 1 lần mỗi khi chữ hiện ra
+    if (phase === 1 && key !== lastSpoken) { lastSpoken = key; setTimeout(() => speak(c.word), quiz ? 350 : 0); }
+    if (phase === 0) lastSpoken = '';
     $('counter').textContent = (idx + 1) + ' / ' + deck.length;
     renderChoices(c);
     updatePhaseText();
@@ -199,9 +202,11 @@
     const c = cur();
     if (!c || answered) return;
     if (norm(w) === norm(c.word)) {
+      beep(true);
       answered = true; phase = 1; elapsed = 0;     // hiện từ trên tranh, rồi tự sang thẻ nếu đang phát
       renderCard();
     } else {
+      beep(false);
       wrong.add(norm(w));
       renderCard();
       const b = [...$('choices').children].find(x => x.querySelector('.txt').textContent === w);
@@ -220,6 +225,55 @@
     phase = 0; elapsed = 0; answered = false; quizFor = null;
     renderCard();
   };
+  /* ---------- ÂM THANH: đọc từ (giọng máy) + tiếng đúng/sai ---------- */
+  let soundOn = true, lastSpoken = '', voice = null, actx = null;
+  try { soundOn = localStorage.getItem('fc-sound') !== 'off'; } catch (e) {}
+  const tts = 'speechSynthesis' in window;
+  function pickVoice() {
+    if (!tts) return;
+    const vs = speechSynthesis.getVoices().filter(v => /^en(-|_|$)/i.test(v.lang));
+    voice = vs.find(v => /en-US/i.test(v.lang) && /google|samantha|aria|jenny|natural/i.test(v.name))
+         || vs.find(v => /en-US/i.test(v.lang)) || vs.find(v => /en-GB/i.test(v.lang)) || vs[0] || null;
+  }
+  if (tts) { pickVoice(); speechSynthesis.onvoiceschanged = pickVoice; }
+  function speak(text) {
+    if (!soundOn || !tts || !text) return;
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = voice ? voice.lang : 'en-US'; if (voice) u.voice = voice;
+    u.rate = 0.85;
+    speechSynthesis.speak(u);
+  }
+  function beep(ok) {
+    if (!soundOn) return;
+    try {
+      actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+      if (actx.state === 'suspended') actx.resume();
+      const notes = ok ? [[660, 0], [990, .12]] : [[200, 0], [150, .15]];
+      notes.forEach(([f, t]) => {
+        const o = actx.createOscillator(), g = actx.createGain();
+        o.type = ok ? 'sine' : 'square'; o.frequency.value = f;
+        const s0 = actx.currentTime + t;
+        g.gain.setValueAtTime(0.0001, s0); g.gain.exponentialRampToValueAtTime(ok ? .25 : .12, s0 + .02);
+        g.gain.exponentialRampToValueAtTime(0.0001, s0 + .22);
+        o.connect(g).connect(actx.destination); o.start(s0); o.stop(s0 + .25);
+      });
+    } catch (e) {}
+  }
+  function updateSoundBtn() {
+    $('soundBtn').setAttribute('aria-pressed', String(soundOn));
+    $('icoSound').toggleAttribute('hidden', !soundOn);
+    $('icoMute').toggleAttribute('hidden', soundOn);
+  }
+  updateSoundBtn();
+  $('soundBtn').onclick = () => {
+    soundOn = !soundOn;
+    try { localStorage.setItem('fc-sound', soundOn ? 'on' : 'off'); } catch (e) {}
+    if (!soundOn && tts) speechSynthesis.cancel();
+    updateSoundBtn();
+    if (soundOn && phase === 1 && cur()) speak(cur().word);
+  };
+
   function setPlaying(v) {
     playing = v;
     // SVG không có thuộc tính .hidden, phải dùng attribute
@@ -312,6 +366,10 @@
   stage.addEventListener('pointercancel', endPtr);
   stage.addEventListener('click', e => {
     if (e.target.closest('.zoombar') || moved || zoom.s > 1) return;
+    if (phase === 1) {                                   // bấm vào chữ: đọc lại
+      const r = $('cardWord').getBoundingClientRect();
+      if (e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) { speak(cur().word); return; }
+    }
     advance();                                     // bấm vào tranh: hiện chữ / sang thẻ
   });
   window.addEventListener('resize', applyZoom);
@@ -322,6 +380,7 @@
     else if (e.key === 'ArrowLeft') { go(-1); e.preventDefault(); }
     else if (e.key === ' ') { $('playBtn').click(); e.preventDefault(); }
     else if (e.key === 'f' || e.key === 'F') toggleFs();
+    else if (e.key === 's' || e.key === 'S') { if (cur()) { const was = soundOn; soundOn = true; speak(cur().word); soundOn = was; } }
     else if (e.key === '+' || e.key === '=') setZoom(zoom.s * 1.4);
     else if (e.key === '-') setZoom(zoom.s / 1.4);
     else if (e.key === '0') setZoom(1);

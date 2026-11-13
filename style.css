@@ -184,3 +184,8 @@ body.quiz .stage{max-height:calc(100vh - 380px);max-height:calc(100dvh - 380px)}
   body.quiz .stage{height:calc(100vh - 160px);height:calc(100dvh - 160px)}
 }
 @media (prefers-reduced-motion: reduce){ .shake{animation:none} }
+
+/* Âm thanh */
+.stage.reveal .word{cursor:pointer}
+#soundBtn[aria-pressed="true"]{background:var(--surface);border-color:var(--line);color:inherit}
+#soundBtn[aria-pressed="false"]{color:var(--muted)}
