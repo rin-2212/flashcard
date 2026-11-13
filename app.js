@@ -499,9 +499,14 @@
     if (!shown.length) { box.innerHTML = '<p class="status">Chưa có thẻ nào ở đây.</p>'; return; }
     shown.forEach((c, i) => {
       const el = document.createElement('div'); el.className = 'item';
-      el.innerHTML = `<img alt=""><div class="fields"><input class="field w" aria-label="Từ mới"><input class="field t" list="topicList" aria-label="Chủ đề" placeholder="Chủ đề"></div>
+      el.innerHTML = `<button class="thumb" title="Bấm để đổi ảnh" aria-label="Đổi ảnh"><img alt=""><span>Đổi ảnh</span></button><div class="fields"><input class="field w" aria-label="Từ mới"><input class="field t" list="topicList" aria-label="Chủ đề" placeholder="Chủ đề"></div>
         <div class="acts"><button class="ibtn up" aria-label="Lên trên">${ICON_UP}</button><button class="ibtn dn" aria-label="Xuống dưới">${ICON_DOWN}</button><button class="ibtn del" aria-label="Xoá thẻ">${ICON_DEL}</button></div>`;
       el.querySelector('img').src = c.url;
+      const th = el.querySelector('.thumb');
+      th.onclick = () => pickImageFor(c);
+      th.ondragover = e => { e.preventDefault(); th.classList.add('over'); };
+      th.ondragleave = () => th.classList.remove('over');
+      th.ondrop = e => { e.preventDefault(); th.classList.remove('over'); const f = e.dataTransfer.files[0]; if (f) replaceImage(c, f); };
       const w = el.querySelector('.w'), t = el.querySelector('.t');
       w.value = c.word || ''; t.value = c.topic || '';
       const save = (inp, key) => async () => {
@@ -529,6 +534,29 @@
       box.appendChild(el);
     });
   }
+  /* ---------- Đổi ảnh của thẻ có sẵn ---------- */
+  const replaceIn = document.createElement('input');
+  replaceIn.type = 'file'; replaceIn.accept = 'image/*'; replaceIn.hidden = true;
+  document.body.appendChild(replaceIn);
+  let replaceTarget = null;
+  function pickImageFor(c) { replaceTarget = c; replaceIn.value = ''; replaceIn.click(); }
+  replaceIn.onchange = () => { const f = replaceIn.files[0]; if (f && replaceTarget) replaceImage(replaceTarget, f); };
+  async function replaceImage(c, file) {
+    if (!file.type.startsWith('image/')) { setStatus('listStatus', 'File không phải ảnh.', true); return; }
+    setStatus('listStatus', `Đang đổi ảnh cho “${c.word}”…`);
+    try {
+      const blob = await shrink(file);
+      const path = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${extOf(blob.type)}`;
+      const up = await sb.storage.from(BUCKET).upload(path, blob, { contentType: blob.type, cacheControl: '31536000' });
+      if (up.error) throw up.error;
+      const { error } = await sb.from('cards').update({ image_path: path }).eq('id', c.id);
+      if (error) { await sb.storage.from(BUCKET).remove([path]); throw error; }
+      if (c.image_path) await sb.storage.from(BUCKET).remove([c.image_path]);
+      setStatus('listStatus', `Đã đổi ảnh cho “${c.word}”.`);
+      loadCards();
+    } catch (e) { setStatus('listStatus', 'Không đổi được ảnh: ' + (e.message || e), true); }
+  }
+
   let swapping = false;
   async function swap(a, b) {
     if (!b || swapping) return;

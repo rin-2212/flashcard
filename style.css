@@ -189,3 +189,12 @@ body.quiz .stage{max-height:calc(100vh - 380px);max-height:calc(100dvh - 380px)}
 .stage.reveal .word{cursor:pointer}
 #soundBtn[aria-pressed="true"]{background:var(--surface);border-color:var(--line);color:inherit}
 #soundBtn[aria-pressed="false"]{color:var(--muted)}
+
+/* Đổi ảnh trong danh sách */
+.thumb{position:relative;padding:0;border:0;background:none;border-radius:8px;overflow:hidden;width:64px;height:48px}
+.thumb img{display:block}
+.thumb span{position:absolute;inset:0;display:grid;place-items:center;background:rgba(28,37,65,.65);color:#fff;font-size:.72rem;font-weight:700;opacity:0;transition:opacity .15s}
+.thumb:hover span,.thumb:focus-visible span,.thumb.over span{opacity:1}
+.thumb.over{outline:3px solid var(--sky)}
+@media (hover:none){ .thumb span{opacity:1;background:rgba(28,37,65,.45);align-items:end;padding-bottom:2px} }
+@media (max-width:560px){ .thumb{width:52px;height:40px} .thumb img{width:52px;height:40px} }
